@@ -41,9 +41,13 @@ SimSys_Scripts:
     source: git@github.com:MetOffice/SimSys_Scripts.git
     ref: cab3315147a3c7e8546dda559d3da0fccd702f29
 
+#socrates:
+#    source: git@github.com:Petzi1/socrates.git
+#    ref: cosp_add_diag
+
 socrates:
-    source: git@github.com:MetOffice/socrates.git
-    ref: 2026.03.2
+     source: cazldf00005B:/home/users/stephan.havemann/work_fork/socrates_cosp_add_diag
+     ref: cosp_add_diag
 
 socrates-spectral:
     source: git@github.com:MetOffice/socrates-spectral.git

@@ -26,7 +26,7 @@ private
 
 type, public, extends(kernel_type) :: cosp_kernel_type
   private
-  type(arg_type) :: meta_args(50) = (/ &
+  type(arg_type) :: meta_args(60) = (/ &
     arg_type(GH_FIELD,  GH_REAL,    GH_READ,  Wtheta),                    & ! pressure_in_wth
     arg_type(GH_FIELD,  GH_REAL,    GH_READ,  Wtheta),                    & ! temperature_in_wth
     arg_type(GH_FIELD,  GH_REAL,    GH_READ,  Wtheta),                    & ! rho_in_wth
@@ -76,6 +76,16 @@ type, public, extends(kernel_type) :: cosp_kernel_type
     arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_3), & ! calipso_cf_40_lvls_mask
     arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_4), & ! calipso_total_backscatter
     arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_5), & ! calipso_cfad_sr_40_lvls
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_1), & ! calipso_cloudsat_40_cl_mask
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_1), & ! weighted_cloud_albedo
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_1), & ! weighted_ctp
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_1), & ! tot_cloud_area
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_3), & ! cloudsat_gbxmean_ze_40
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_3), & ! calipso_gbxmean_atb_40
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_3), & ! calipso_mol_atb_40
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_3), & ! calipso_cloudsat_40_cl
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_3), & ! cloudsat_cloud_area_40
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, ANY_DISCONTINUOUS_SPACE_5), & ! cloudsat_cfad_ze_40
     arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, Wtheta),                    & ! cloud_thermal_absorptivity
     arg_type(GH_FIELD,  GH_REAL,    GH_WRITE, Wtheta)                     & ! cloud_solar_extinction
     /)
@@ -90,78 +100,87 @@ public :: cosp_code
 
 contains
 
-!> @param[in]    nlayers                    Number of layers in Wtheta field
-!> @param[in]    n_profile                  Number of columns
-!> @param[in]    pressure_in_wth            Pressure in Wtheta space
-!> @param[in]    temperature_in_wth         Temperature in Wtheta space
-!> @param[in]    rho_in_wth                 Density in Wtheta space
-!> @param[in]    height_wth                 Height in Wtheta space
-!> @param[in]    pressure_in_w3             Pressure in W3 space
-!> @param[in]    height_w3                  Height in W3 space
-!> @param[in]    mv                         Water vapour field
-!> @param[in]    mcl                        Large scale cloud liquid gridbox MMR
-!> @param[in]    mcf                        Large scale cloud frozen gridbox MMR
-!> @param[in]    radiative_cloud_fraction   Large scale cloud fraction
-!> @param[in]    liquid_fraction            Large scale liquid cloud fraction
-!> @param[in]    frozen_fraction            Large scale frozen cloud fraction
-!> @param[in]    radiative_conv_fraction    Convective cloud fraction
-!> @param[in]    conv_liquid_fraction       Convective liquid cloud fraction
-!> @param[in]    conv_frozen_fraction       Convective frozen cloud fraction
-!> @param[in]    conv_liquid_mmr            Convective liquid gridbox MMR
-!> @param[in]    conv_frozen_mmr            Convective frozen gridbox MMR
-!> @param[in]    conv_frozen_number         Convective frozen number conc
-!> @param[in]    sigma_ml                   Fractional standard deviation of liquid condensate
-!> @param[in]    sigma_mi                   Fractional standard deviation of ice condensate
-!> @param[in]    cloud_drop_no_conc         Cloud Droplet Number Concentration
-!> @param[in]    ls_rain_3d                 Large scale rain
-!> @param[in]    conv_rain_3d               Convective rain
-!> @param[in]    conv_snow_3d               Convective snow
-!> @param[in]    lit_fraction               Lit fraction of the timestep
-!> @param[in]    rand_seed                  Random seed field for cloud generator
-!> @param[in]    n_cloud_layer              Number of cloud layers
-!> @param[in]    n_subcol_gen               Number of cloud subcolumns
-!> @param[in]    x1r                        Rain parameter
-!> @param[in]    x2r                        Rain parameter
-!> @param[in]    x1g                        Graupel parameter
-!> @param[in]    x2g                        Graupel parameter
-!> @param[in]    x4g                        Graupel parameter
-!> @param[inout] sunlit_mask                COSP diagnostic
-!> @param[inout] isccp_ctp_tau              COSP diagnostic
-!> @param[inout] calipso_low_cloud          COSP diagnostic
-!> @param[inout] calipso_low_cloud_mask     COSP diagnostic
-!> @param[inout] calipso_mid_cloud          COSP diagnostic
-!> @param[inout] calipso_mid_cloud_mask     COSP diagnostic
-!> @param[inout] calipso_high_cloud         COSP diagnostic
-!> @param[inout] calipso_high_cloud_mask    COSP diagnostic
-!> @param[inout] calipso_cf_40_lvls_liq     COSP diagnostic
-!> @param[inout] calipso_cf_40_lvls_ice     COSP diagnostic
-!> @param[inout] calipso_cf_40_lvls_undet   COSP diagnostic
-!> @param[inout] calipso_cf_40_lvls_mask    COSP diagnostic
-!> @param[inout] calipso_total_backscatter  COSP diagnostic
-!> @param[inout] calipso_cfad_sr_40_lvls    COSP diagnostic
-!> @param[inout] cloud_thermal_absorptivity COSP diagnostic
-!> @param[inout] cloud_solar_extinction     COSP diagnostic
-!> @param[in]    ndf_wtheta                 No. DOFs per cell for Wtheta space
-!> @param[in]    undf_wtheta                No. unique DOFs for Wtheta space
-!> @param[in]    map_wtheta                 Dofmap for Wtheta column base cell
-!> @param[in]    ndf_w3                     No. DOFs per cell for W3 space
-!> @param[in]    undf_w3                    No. unique DOFs for W3 space
-!> @param[in]    map_w3                     Dofmap for W3 column base cell
-!> @param[in]    ndf_2d                     No. DOFs per cell for 2d space
-!> @param[in]    undf_2d                    No. unique DOFs for 2d space
-!> @param[in]    map_2d                     Dofmap for 2d column base cell
-!> @param[in]    ndf_ptau                   No. DOFs per cell for ptau space
-!> @param[in]    undf_ptau                  No. unique DOFs for ptau space
-!> @param[in]    map_ptau                   Dofmap for ptau column base cell
-!> @param[in]    ndf_40                     No. DOFs per cell for 40 space
-!> @param[in]    undf_40                    No. unique DOFs for 40 space
-!> @param[in]    map_40                     Dofmap for 40 column base cell
-!> @param[in]    ndf_subcol                 No. DOFs per cell for subcol space
-!> @param[in]    undf_subcol                No. unique DOFs for subcol space
-!> @param[in]    map_subcol                 Dofmap for subcol column base cell
-!> @param[in]    ndf_atb40                  No. DOFs per cell for atb40 space
-!> @param[in]    undf_atb40                 No. unique DOFs for atb40 space
-!> @param[in]    map_atb40                  Dofmap for atb40 column base cell
+!> @param[in]    nlayers                     Number of layers in Wtheta field
+!> @param[in]    n_profile                   Number of columns
+!> @param[in]    pressure_in_wth             Pressure in Wtheta space
+!> @param[in]    temperature_in_wth          Temperature in Wtheta space
+!> @param[in]    rho_in_wth                  Density in Wtheta space
+!> @param[in]    height_wth                  Height in Wtheta space
+!> @param[in]    pressure_in_w3              Pressure in W3 space
+!> @param[in]    height_w3                   Height in W3 space
+!> @param[in]    mv                          Water vapour field
+!> @param[in]    mcl                         Large scale cloud liquid gridbox MMR
+!> @param[in]    mcf                         Large scale cloud frozen gridbox MMR
+!> @param[in]    radiative_cloud_fraction    Large scale cloud fraction
+!> @param[in]    liquid_fraction             Large scale liquid cloud fraction
+!> @param[in]    frozen_fraction             Large scale frozen cloud fraction
+!> @param[in]    radiative_conv_fraction     Convective cloud fraction
+!> @param[in]    conv_liquid_fraction        Convective liquid cloud fraction
+!> @param[in]    conv_frozen_fraction        Convective frozen cloud fraction
+!> @param[in]    conv_liquid_mmr             Convective liquid gridbox MMR
+!> @param[in]    conv_frozen_mmr             Convective frozen gridbox MMR
+!> @param[in]    conv_frozen_number          Convective frozen number conc
+!> @param[in]    sigma_ml                    Fractional standard deviation of liquid condensate
+!> @param[in]    sigma_mi                    Fractional standard deviation of ice condensate
+!> @param[in]    cloud_drop_no_conc          Cloud Droplet Number Concentration
+!> @param[in]    ls_rain_3d                  Large scale rain
+!> @param[in]    conv_rain_3d                Convective rain
+!> @param[in]    conv_snow_3d                Convective snow
+!> @param[in]    lit_fraction                Lit fraction of the timestep
+!> @param[in]    rand_seed                   Random seed field for cloud generator
+!> @param[in]    n_cloud_layer               Number of cloud layers
+!> @param[in]    n_subcol_gen                Number of cloud subcolumns
+!> @param[in]    x1r                         Rain parameter
+!> @param[in]    x2r                         Rain parameter
+!> @param[in]    x1g                         Graupel parameter
+!> @param[in]    x2g                         Graupel parameter
+!> @param[in]    x4g                         Graupel parameter
+!> @param[inout] sunlit_mask                 COSP diagnostic
+!> @param[inout] isccp_ctp_tau               COSP diagnostic
+!> @param[inout] calipso_low_cloud           COSP diagnostic
+!> @param[inout] calipso_low_cloud_mask      COSP diagnostic
+!> @param[inout] calipso_mid_cloud           COSP diagnostic
+!> @param[inout] calipso_mid_cloud_mask      COSP diagnostic
+!> @param[inout] calipso_high_cloud          COSP diagnostic
+!> @param[inout] calipso_high_cloud_mask     COSP diagnostic
+!> @param[inout] calipso_cf_40_lvls_liq      COSP diagnostic
+!> @param[inout] calipso_cf_40_lvls_ice      COSP diagnostic
+!> @param[inout] calipso_cf_40_lvls_undet    COSP diagnostic
+!> @param[inout] calipso_cf_40_lvls_mask     COSP diagnostic
+!> @param[inout] calipso_total_backscatter   COSP diagnostic
+!> @param[inout] calipso_cfad_sr_40_lvls     COSP diagnostic
+!> @param[inout] calipso_cloudsat_40_cl_mask COSP diagnostic
+!> @param[inout] weighted_cloud_albedo       COSP diagnostic
+!> @param[inout] weighted_ctp                COSP diagnostic
+!> @param[inout] tot_cloud_area              COSP diagnostic
+!> @param[inout] calipso_gbxmean_atb_40      COSP diagnostic
+!> @param[inout] calipso_mol_atb_40          COSP diagnostic
+!> @param[inout] calipso_cloudsat_40_cl      COSP diagnostic
+!> @param[inout] cloudsat_cloud_area_40      COSP diagnostic
+!> @param[inout] cloudsat_cfad_ze_40         COSP diagnostic
+!> @param[inout] cloud_thermal_absorptivity  COSP diagnostic
+!> @param[inout] cloud_solar_extinction      COSP diagnostic
+!> @param[in]    ndf_wtheta                  No. DOFs per cell for Wtheta space
+!> @param[in]    undf_wtheta                 No. unique DOFs for Wtheta space
+!> @param[in]    map_wtheta                  Dofmap for Wtheta column base cell
+!> @param[in]    ndf_w3                      No. DOFs per cell for W3 space
+!> @param[in]    undf_w3                     No. unique DOFs for W3 space
+!> @param[in]    map_w3                      Dofmap for W3 column base cell
+!> @param[in]    ndf_2d                      No. DOFs per cell for 2d space
+!> @param[in]    undf_2d                     No. unique DOFs for 2d space
+!> @param[in]    map_2d                      Dofmap for 2d column base cell
+!> @param[in]    ndf_ptau                    No. DOFs per cell for ptau space
+!> @param[in]    undf_ptau                   No. unique DOFs for ptau space
+!> @param[in]    map_ptau                    Dofmap for ptau column base cell
+!> @param[in]    ndf_40                      No. DOFs per cell for 40 space
+!> @param[in]    undf_40                     No. unique DOFs for 40 space
+!> @param[in]    map_40                      Dofmap for 40 column base cell
+!> @param[in]    ndf_subcol                  No. DOFs per cell for subcol space
+!> @param[in]    undf_subcol                 No. unique DOFs for subcol space
+!> @param[in]    map_subcol                  Dofmap for subcol column base cell
+!> @param[in]    ndf_atb40                   No. DOFs per cell for atb40 space
+!> @param[in]    undf_atb40                  No. unique DOFs for atb40 space
+!> @param[in]    map_atb40                   Dofmap for atb40 column base cell
 subroutine cosp_code(nlayers, n_profile, &
                      pressure_in_wth, temperature_in_wth, rho_in_wth, height_wth, &
                      pressure_in_w3, height_w3, &
@@ -186,6 +205,16 @@ subroutine cosp_code(nlayers, n_profile, &
                      calipso_cf_40_lvls_mask, &
                      calipso_total_backscatter, &
                      calipso_cfad_sr_40_lvls, &
+                     calipso_cloudsat_40_cl_mask, &
+                     weighted_cloud_albedo, &
+                     weighted_ctp, &
+                     tot_cloud_area, &
+                     cloudsat_gbxmean_ze_40, &
+                     calipso_gbxmean_atb_40, &
+                     calipso_mol_atb_40, &
+                     calipso_cloudsat_40_cl, &     
+                     cloudsat_cloud_area_40, &
+                     cloudsat_cfad_ze_40, &
                      cloud_thermal_absorptivity, &
                      cloud_solar_extinction, &
                      ndf_wtheta, undf_wtheta, map_wtheta, &
